@@ -69,3 +69,4 @@ jobs:
         with:
           branch: main
           commit_message: Bump appVersion to ${{ steps.latest_version.outputs.tag }}
+          file_pattern: chart/Chart.yaml
