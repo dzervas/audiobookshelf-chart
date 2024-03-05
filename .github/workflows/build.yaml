@@ -1,0 +1,68 @@
+---
+
+name: Build and Release
+on:
+  schedule:
+    - cron: '30 2 1 */1 *'
+  workflow_dispatch:
+  push:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Current chart version
+        id: chart_version
+        run: |
+          echo "tag=$(grep -oP '(?<=^version: ).+' chart/Chart.yaml)" >> $GITHUB_OUTPUT
+
+      - uses: actions-ecosystem/action-bump-semver@v1
+        id: bump-semver
+        with:
+          current_version: ${{ steps.chart_version.outputs.tag }}
+          level: patch
+
+      - name: Current version
+        id: current_version
+        run: |
+          echo "tag=$(grep -oP '(?<=^appVersion: ).+' chart/Chart.yaml)" >> $GITHUB_OUTPUT
+
+      - name: Latest release version
+        id: latest_version
+        run: |
+          docker pull -a ghcr.io/advplyr/audiobookshelf
+          echo "tag=$(docker inspect ghcr.io/${{ github.repository }}:latest --format '{{ range .RepoTags }}{{ $tag := index (split . \":\") 1 }}{{ if ne $tag \"latest\" }}{{ $tag }}{{ end }}{{ end }}' | sort | tail -n 1)" >> $GITHUB_OUTPUT
+
+      - name: Update Chart.yaml
+        if: steps.current_version.outputs.tag != steps.new_version.outputs.tag
+        run: |
+          sed -i "s/^appVersion: .*/appVersion: ${{ steps.latest_version.outputs.tag }}/" chart/Chart.yaml
+          sed -i "s/^version: .*/version: ${{ steps.bump-semver.outputs.new_version }}/" chart/Chart.yaml
+
+      - name: Install Helm
+        if: steps.current_version.outputs.tag != steps.new_version.outputs.tag
+        uses: azure/setup-helm@v4
+
+      - name: Run chart-releaser
+        if: success() && steps.current_version.outputs.tag != steps.new_version.outputs.tag
+        uses: helm/chart-releaser-action@v1
+        with:
+          charts_dir: chart
+        env:
+          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          CR_RELEASE_NAME_TEMPLATE: "{{ .Version }}"
+
+      - name: Commit changes
+        if: success() && steps.current_version.outputs.tag != steps.new_version.outputs.tag
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          branch: main
+          commit_message: Bump appVersion

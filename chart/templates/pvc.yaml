@@ -1,0 +1,30 @@
+{{- if .Values.persistence.enabled }}
+{{- range $dir := .Values.global.required_dirs -}}
+{{- with $.Values.persistence }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "audiobookshelf.fullname" $ }}-{{ $dir }}
+spec:
+  accessModes:
+  {{- range .accessModes }}
+    - {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      {{- if eq $dir "config" }}
+      storage: {{ .config.size | default "512Mi" }}
+      {{- else if eq $dir "metadata" }}
+      storage: {{ .metadata.size | default "512Mi" }}
+      {{- else if eq $dir "audiobooks" }}
+      storage: {{ .audiobooks.size | default "10Gi" }}
+      {{- else if eq $dir "podcasts" }}
+      storage: {{ .podcasts.size | default "10Gi" }}
+      {{- else }}
+      storage: {{ .size | default "10Gi" }}
+      {{- end }}
+  storageClassName: {{ .storageClass | default "" }}
+{{- end }}
+{{- end }}
+{{- end }}
