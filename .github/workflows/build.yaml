@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -25,7 +26,7 @@ jobs:
           echo "tag=$(grep -oP '(?<=^version: ).+' chart/Chart.yaml)" >> $GITHUB_OUTPUT
 
       - uses: actions-ecosystem/action-bump-semver@v1
-        id: bump-semver
+        id: bump_semver
         with:
           current_version: ${{ steps.chart_version.outputs.tag }}
           level: patch
@@ -39,13 +40,13 @@ jobs:
         id: latest_version
         run: |
           export TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:advplyr/audiobookshelf:pull" | jq -r ".token")
-          echo "tag=$(curl -s -L -H \"Authorization: Bearer ${TOKEN}\" https://ghcr.io/v2/advplyr/audiobookshelf/tags/list | jq -r '.tags | last')" >> $GITHUB_OUTPUT
+          echo "tag=$(curl -s -L -H "Authorization: Bearer ${TOKEN}" https://ghcr.io/v2/advplyr/audiobookshelf/tags/list | jq -r '.tags | last')" >> $GITHUB_OUTPUT
 
       - name: Update Chart.yaml
         if: steps.current_version.outputs.tag != steps.latest_version.outputs.tag
         run: |
           sed -i "s/^appVersion: .*/appVersion: ${{ steps.latest_version.outputs.tag }}/" chart/Chart.yaml
-          sed -i "s/^version: .*/version: ${{ steps.bump-semver.outputs.new_version }}/" chart/Chart.yaml
+          sed -i "s/^version: .*/version: ${{ steps.bump_semver.outputs.new_version }}/" chart/Chart.yaml
 
       - name: Install Helm
         if: steps.current_version.outputs.tag != steps.latest_version.outputs.tag
@@ -53,16 +54,18 @@ jobs:
 
       - name: Run chart-releaser
         if: success() && steps.current_version.outputs.tag != steps.latest_version.outputs.tag
-        uses: helm/chart-releaser-action@v1
+        uses: bsord/helm-push@v4
         with:
-          charts_dir: chart
-        env:
-          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
-          CR_RELEASE_NAME_TEMPLATE: "{{ .Version }}"
+          chart-folder: chart
+          useOCIRegistry: true
+          registry-url: oci://ghcr.io/${{ github.repository }}
+          username: ${{ github.actor }}
+          access-token: ${{ secrets.GITHUB_TOKEN }}
+          force: true
 
       - name: Commit changes
         if: success() && steps.current_version.outputs.tag != steps.latest_version.outputs.tag
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           branch: main
-          commit_message: Bump appVersion
+          commit_message: Bump appVersion to ${{ steps.latest_version.outputs.tag }}
