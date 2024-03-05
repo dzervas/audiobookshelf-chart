@@ -38,21 +38,21 @@ jobs:
       - name: Latest release version
         id: latest_version
         run: |
-          docker pull -a ghcr.io/advplyr/audiobookshelf
-          echo "tag=$(docker inspect ghcr.io/${{ github.repository }}:latest --format '{{ range .RepoTags }}{{ $tag := index (split . \":\") 1 }}{{ if ne $tag \"latest\" }}{{ $tag }}{{ end }}{{ end }}' | sort | tail -n 1)" >> $GITHUB_OUTPUT
+          export TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:advplyr/audiobookshelf:pull" | jq -r ".token")
+          echo "tag=$(curl -s -L -H \"Authorization: Bearer ${TOKEN}\" https://ghcr.io/v2/advplyr/audiobookshelf/tags/list | jq -r '.tags | last')" >> $GITHUB_OUTPUT
 
       - name: Update Chart.yaml
-        if: steps.current_version.outputs.tag != steps.new_version.outputs.tag
+        if: steps.current_version.outputs.tag != steps.latest_version.outputs.tag
         run: |
           sed -i "s/^appVersion: .*/appVersion: ${{ steps.latest_version.outputs.tag }}/" chart/Chart.yaml
           sed -i "s/^version: .*/version: ${{ steps.bump-semver.outputs.new_version }}/" chart/Chart.yaml
 
       - name: Install Helm
-        if: steps.current_version.outputs.tag != steps.new_version.outputs.tag
+        if: steps.current_version.outputs.tag != steps.latest_version.outputs.tag
         uses: azure/setup-helm@v4
 
       - name: Run chart-releaser
-        if: success() && steps.current_version.outputs.tag != steps.new_version.outputs.tag
+        if: success() && steps.current_version.outputs.tag != steps.latest_version.outputs.tag
         uses: helm/chart-releaser-action@v1
         with:
           charts_dir: chart
@@ -61,7 +61,7 @@ jobs:
           CR_RELEASE_NAME_TEMPLATE: "{{ .Version }}"
 
       - name: Commit changes
-        if: success() && steps.current_version.outputs.tag != steps.new_version.outputs.tag
+        if: success() && steps.current_version.outputs.tag != steps.latest_version.outputs.tag
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           branch: main
