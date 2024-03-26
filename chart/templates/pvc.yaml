@@ -7,6 +7,9 @@ kind: PersistentVolumeClaim
 metadata:
   name: {{ include "audiobookshelf.fullname" $ }}-{{ $dir }}
 spec:
+  {{- if hasKey (index . $dir) "volumeName" }}
+  volumeName: {{ (index . $dir).volumeName }}
+  {{- end }}
   accessModes:
   {{- range .accessModes }}
     - {{ . | quote }}
