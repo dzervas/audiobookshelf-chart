@@ -3,5 +3,5 @@ name: audiobookshelf
 description: Self-hosted audiobook and podcast server
 
 type: application
-version: 0.2.3
-appVersion: 2.10.1
+version: 0.2.4
+appVersion: 2.11.0
